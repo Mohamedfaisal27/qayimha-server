@@ -6,8 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ------ هذي المفاتيح تحطها كمتغيرات بيئة (Environment Variables) بمنصة الاستضافة ------
-// لا تكتبها هنا مباشرة أبداً
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
@@ -76,3 +74,21 @@ app.get('/api/games/:id', async (req, res) => {
     res.status(500).json({ error: 'صار خطأ بجلب تفاصيل اللعبة', details: err.message });
   }
 });
+
+app.get('/api/debug', (req, res) => {
+  const mask = (v) => {
+    if (!v) return 'غير موجود';
+    return `طوله ${v.length} خانة، يبدأ بـ "${v.slice(0, 4)}", ينتهي بـ "${v.slice(-4)}"`;
+  };
+  res.json({
+    TWITCH_CLIENT_ID: mask(TWITCH_CLIENT_ID),
+    TWITCH_CLIENT_SECRET: mask(TWITCH_CLIENT_SECRET),
+  });
+});
+
+app.get('/', (req, res) => {
+  res.send('سيرفر قيمها شغّال ✅');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`السيرفر شغال على المنفذ ${PORT}`));
