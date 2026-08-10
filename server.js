@@ -14,7 +14,6 @@ const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 let cachedToken = null;
 let tokenExpiresAt = 0;
 
-// يجيب توكن دخول من Twitch، ويعيد استخدامه لين ينتهي
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt) {
     return cachedToken;
@@ -24,12 +23,15 @@ async function getAccessToken() {
     { method: 'POST' }
   );
   const data = await res.json();
+  if (!data.access_token) {
+    console.error('فشل الحصول على توكن من Twitch:', JSON.stringify(data));
+    throw new Error('Twitch token error: ' + JSON.stringify(data));
+  }
   cachedToken = data.access_token;
-  tokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000; // نجدد قبل الانتهاء بدقيقة
+  tokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000;
   return cachedToken;
 }
 
-// نقطة الوصول اللي يطلبها التطبيق: يبحث عن لعبة بالاسم
 app.get('/api/games/search', async (req, res) => {
   try {
     const query = req.query.q;
@@ -44,7 +46,6 @@ app.get('/api/games/search', async (req, res) => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'text/plain',
       },
-      // نطلب الحقول اللي نحتاجها بس: الاسم، الغلاف، السعر التقديري، التصنيف، المنصات
       body: `search "${query}"; fields name, cover.url, first_release_date, genres.name, platforms.name, age_ratings.rating, summary; limit 10;`,
     });
 
@@ -52,11 +53,10 @@ app.get('/api/games/search', async (req, res) => {
     res.json(games);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'صار خطأ بجلب بيانات اللعبة' });
+    res.status(500).json({ error: 'صار خطأ بجلب بيانات اللعبة', details: err.message });
   }
 });
 
-// نقطة الوصول: يجيب لعبة واحدة بالتفصيل عبر الـ id
 app.get('/api/games/:id', async (req, res) => {
   try {
     const token = await getAccessToken();
@@ -73,13 +73,6 @@ app.get('/api/games/:id', async (req, res) => {
     res.json(games[0] || null);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'صار خطأ بجلب تفاصيل اللعبة' });
+    res.status(500).json({ error: 'صار خطأ بجلب تفاصيل اللعبة', details: err.message });
   }
 });
-
-app.get('/', (req, res) => {
-  res.send('سيرفر قيّمها شغّال ✅');
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`السيرفر شغال على المنفذ ${PORT}`));
