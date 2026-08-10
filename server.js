@@ -71,24 +71,20 @@ app.get('/api/games/:id', async (req, res) => {
     res.json(games[0] || null);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'صار خطأ بجلب تفاصيل اللعبة', details: err.message });
+    res.status(500).json({ error: 'صار خطأ بجلب تفاصيل اللعبة' });
   }
 });
 
 app.get('/api/debug', (req, res) => {
-  const mask = (v) => {
-    if (!v) return 'غير موجود';
-    return `طوله ${v.length} خانة، يبدأ بـ "${v.slice(0, 4)}", ينتهي بـ "${v.slice(-4)}"`;
-  };
   res.json({
-    TWITCH_CLIENT_ID: mask(TWITCH_CLIENT_ID),
-    TWITCH_CLIENT_SECRET: mask(TWITCH_CLIENT_SECRET),
+    TWITCH_CLIENT_ID_FULL: TWITCH_CLIENT_ID || 'غير موجود',
+    TWITCH_CLIENT_SECRET_FULL: TWITCH_CLIENT_SECRET || 'غير موجود',
   });
 });
 
 app.get('/', (req, res) => {
-  res.send('سيرفر قيمها شغّال ✅');
+  res.send('سيرفر قيّمها شغّال ✅');
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`السيرفر شغال على المنفذ ${PORT}`));
+app.listen(PORT, () => console.log(`السيرفر شغال على المنفذ ${PORT}`));
