@@ -1,10 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
+import pg from 'pg';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
@@ -75,11 +76,80 @@ app.get('/api/games/:id', async (req, res) => {
   }
 });
 
-app.get('/api/debug', (req, res) => {
-  res.json({
-    TWITCH_CLIENT_ID_FULL: TWITCH_CLIENT_ID || 'غير موجود',
-    TWITCH_CLIENT_SECRET_FULL: TWITCH_CLIENT_SECRET || 'غير موجود',
-  });
+/* ========================================================
+   تخزين البيانات (بروفايلات، تقييمات، دردشة، أغلفة...)
+   جدول واحد بسيط: مفتاح -> قيمة نصية (JSON)
+   ======================================================== */
+
+const { Pool } = pg;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+let dbReady = false;
+async function ensureTable() {
+  if (dbReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS kv_store (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+  dbReady = true;
+}
+
+app.get('/api/kv/:key', async (req, res) => {
+  try {
+    await ensureTable();
+    const result = await pool.query('SELECT value FROM kv_store WHERE key = $1', [req.params.key]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ key: req.params.key, value: result.rows[0].value });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ بجلب البيانات' });
+  }
+});
+
+app.put('/api/kv/:key', async (req, res) => {
+  try {
+    await ensureTable();
+    const { value } = req.body;
+    if (typeof value !== 'string') return res.status(400).json({ error: 'value يجب أن يكون نص' });
+    await pool.query(
+      `INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [req.params.key, value]
+    );
+    res.json({ key: req.params.key, value, ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ بحفظ البيانات' });
+  }
+});
+
+app.delete('/api/kv/:key', async (req, res) => {
+  try {
+    await ensureTable();
+    await pool.query('DELETE FROM kv_store WHERE key = $1', [req.params.key]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ بالحذف' });
+  }
+});
+
+app.get('/api/kv-list', async (req, res) => {
+  try {
+    await ensureTable();
+    const prefix = req.query.prefix || '';
+    const result = await pool.query('SELECT key FROM kv_store WHERE key LIKE $1', [prefix + '%']);
+    res.json({ keys: result.rows.map(r => r.key) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ بجلب القائمة' });
+  }
 });
 
 app.get('/', (req, res) => {
